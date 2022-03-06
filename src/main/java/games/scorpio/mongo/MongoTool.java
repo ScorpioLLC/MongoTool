@@ -14,10 +14,10 @@ import org.bson.types.ObjectId;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
-// TODO Maybe add support to exclude different collections from import/export
 public class MongoTool {
 
     private static final Gson gson = new GsonBuilder().setPrettyPrinting().serializeNulls().create();
@@ -28,6 +28,7 @@ public class MongoTool {
         parser.accepts("clientURI").withRequiredArg().required().ofType(String.class);
         parser.accepts("import");
         parser.accepts("export");
+        parser.accepts("excludes").withRequiredArg().required().ofType(String.class);
         parser.accepts("collection").withRequiredArg().ofType(String.class);
         parser.accepts("database").withRequiredArg().ofType(String.class);
 
@@ -59,16 +60,16 @@ public class MongoTool {
         }
 
         if (options.has("import")) {
-            importMongo(client, (String) options.valueOf("database"));
+            importMongo(options, client, (String) options.valueOf("database"));
         } else if (options.has("export")) {
-            export(client, (String) options.valueOf("database"), options.has("collection") ? (String) options.valueOf("collection") : null);
+            export(options, client, (String) options.valueOf("database"), options.has("collection") ? (String) options.valueOf("collection") : null);
         } else {
             System.out.println("Unsupported method.");
             System.exit(1);
         }
     }
 
-    public static void importMongo(MongoClient client, String databaseName) {
+    public static void importMongo(OptionSet options, MongoClient client, String databaseName) {
         MongoDatabase database = client.getDatabase(databaseName);
         File folder = new File(databaseName);
 
@@ -86,10 +87,22 @@ public class MongoTool {
 
         List<File> collections = new ArrayList<>();
 
+        List<String> excludes = new ArrayList<>();
+
+        // We allow people to exclude some collections from their database export
+        if (options.has("excludes")) {
+            excludes.addAll(Arrays.asList(((String) options.valueOf("excludes")).split(",")));
+        }
+
         // Intellij really wants NonNull check here... when we check above
         // no idea, why Intellij is so weird.
         for (File collection : Objects.requireNonNull(folder.listFiles())) {
             if (!collection.getName().endsWith(".json")) {
+                continue;
+            }
+
+            // We allow people to exclude when importing (Maybe don't wanna overwrite the current collection?)
+            if (excludes.contains(collection.getName().split("\\.")[0])) {
                 continue;
             }
             collections.add(collection);
@@ -113,7 +126,7 @@ public class MongoTool {
         System.out.println("Completed import in " + (System.currentTimeMillis() - start) + "ms");
     }
 
-    private static void export(MongoClient client, String databaseName, String specificCollection) {
+    private static void export(OptionSet options, MongoClient client, String databaseName, String specificCollection) {
         List<String> collections = new ArrayList<>();
 
         MongoDatabase database = client.getDatabase(databaseName);
@@ -122,7 +135,17 @@ public class MongoTool {
         // we don't have a specific collection else we will
         // add the specific collection by itself to the collection
         if (specificCollection == null) {
+            List<String> excludes = new ArrayList<>();
+
+            // We allow people to exclude some collections from their database export
+            if (options.has("excludes")) {
+                excludes.addAll(Arrays.asList(((String) options.valueOf("excludes")).split(",")));
+            }
+
             for (String collection : database.listCollectionNames()) {
+                if (excludes.contains(collection)) {
+                    continue;
+                }
                 collections.add(collection);
             }
         } else {
