@@ -1,6 +1,7 @@
 package games.scorpio.mongo;
 
 import com.google.gson.*;
+import com.google.gson.reflect.TypeToken;
 import com.mongodb.MongoClient;
 import com.mongodb.MongoClientURI;
 import com.mongodb.client.MongoCollection;
@@ -28,7 +29,7 @@ public class MongoTool {
         parser.accepts("clientURI").withRequiredArg().required().ofType(String.class);
         parser.accepts("import");
         parser.accepts("export");
-        parser.accepts("excludes").withRequiredArg().required().ofType(String.class);
+        parser.accepts("excludes").withRequiredArg().ofType(String.class);
         parser.accepts("collection").withRequiredArg().ofType(String.class);
         parser.accepts("database").withRequiredArg().ofType(String.class);
 
@@ -116,7 +117,12 @@ public class MongoTool {
                 JsonArray array = gson.fromJson(reader, JsonArray.class);
 
                 for (JsonElement element : array) {
-                    documents.add(gson.fromJson(element, Document.class));
+                    // We parse as a document instead of having GSON parsing it to a document
+                    // because GSON likes to make everything doubles, and when inserted into mongo
+                    // it likes to break, tons, and tons, and tons of stuff... so parsing will do
+                    // this isn't meant to be as fast, cause Document#parse seems to create a whole
+                    // lot of objects for no reason.
+                    documents.add(Document.parse(element.getAsJsonObject().toString()));
                 }
                 String collectionName = collection.getName().split("\\.")[0];
                 database.getCollection(collectionName).insertMany(documents);
