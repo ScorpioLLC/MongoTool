@@ -10,6 +10,7 @@ import joptsimple.OptionException;
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;
 import org.bson.Document;
+import org.bson.types.ObjectId;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -165,6 +166,13 @@ public class MongoTool {
                 // Gather all documents and create a JsonElement from them
                 // and add them to the array
                 for (Document document : collection.find()) {
+                    // If you use the ObjectId from _id to find the document
+                    // please don't use this... we won't correctly serialize it
+                    // (I'll try to rewrite this to support it, shouldn't
+                    // be hard, but i don't need this. So im not focused on it)
+                    if (document.get("_id") instanceof ObjectId) {
+                        document.remove("_id");
+                    }
                     array.add(gson.toJsonTree(document));
                 }
                 FileUtil.write(gson.toJson(array), collectionFile);
